@@ -1,0 +1,77 @@
+buildscript {
+    repositories {
+        mavenLocal()
+        gradlePluginPortal()
+        mavenCentral()
+    }
+    dependencies {
+        // see https://plugins.gradle.org/plugin/org.apache.pekko.grpc.gradle
+        // for the currently latest version.
+        classpath 'org.apache.pekko:pekko-grpc-gradle-plugin:2.0.0-M1'
+    }
+}
+
+plugins {
+    id 'java'
+    id 'application'
+}
+apply plugin: 'org.apache.pekko.grpc.gradle'
+
+group 'at.fhv.lab2'
+version '1.0-SNAPSHOT'
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+ext {
+    pekkoVersion = "2.0.0-M1"
+    mqttVersion = "1.2.5"
+    h2Version = "2.4.240"
+    logbackVersion = "1.5.18"
+    junitVersion = "5.9.2"
+}
+
+dependencies {
+    implementation platform("org.apache.pekko:pekko-bom_3:$pekkoVersion")
+    implementation "org.apache.pekko:pekko-actor-typed_3:$pekkoVersion"
+
+    implementation "org.apache.pekko:pekko-discovery_3:$pekkoVersion"
+    implementation "org.apache.pekko:pekko-stream_3:$pekkoVersion"
+    implementation "org.apache.pekko:pekko-pki_3:$pekkoVersion"
+    implementation "org.apache.pekko:pekko-grpc-runtime_3:$pekkoVersion"
+    implementation "org.apache.pekko:pekko-http_3:$pekkoVersion"
+    implementation "org.apache.pekko:pekko-persistence-typed_3:$pekkoVersion"
+    implementation "org.apache.pekko:pekko-persistence-jdbc_3:$pekkoVersion"
+    implementation "org.apache.pekko:pekko-persistence-query_3:$pekkoVersion"
+
+    implementation "org.eclipse.paho:org.eclipse.paho.client.mqttv3:$mqttVersion"
+    implementation "com.h2database:h2:$h2Version"
+    implementation "ch.qos.logback:logback-classic:$logbackVersion"
+
+    testImplementation "org.junit.jupiter:junit-jupiter-api:$junitVersion"
+    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:$junitVersion"
+}
+
+
+application {
+    mainClass = 'at.fhv.sysarch.lab2.HomeAutomationSystem'
+}
+
+tasks.withType(Copy).configureEach {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+run {
+    standardInput = System.in
+}
+
+test {
+    useJUnitPlatform()
+}
+
+task runServer(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'at.fhv.sysarch.lab2.homeautomation.grpcdemo.GreeterServer'
+}
