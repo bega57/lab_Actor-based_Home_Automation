@@ -1,7 +1,6 @@
 package at.fhv.sysarch.lab2.homeautomation;
 
-import at.fhv.sysarch.lab2.homeautomation.devices.AirCondition;
-import at.fhv.sysarch.lab2.homeautomation.devices.TemperatureSensor;
+import at.fhv.sysarch.lab2.homeautomation.devices.*;
 import at.fhv.sysarch.lab2.homeautomation.uihandler.DemoHttpServer;
 import org.apache.pekko.actor.typed.ActorRef;
 import org.apache.pekko.actor.typed.Behavior;
@@ -12,6 +11,7 @@ import org.apache.pekko.actor.typed.javadsl.Behaviors;
 import org.apache.pekko.actor.typed.javadsl.Receive;
 import org.apache.pekko.http.javadsl.Http;
 import org.apache.pekko.http.javadsl.ServerBinding;
+import at.fhv.sysarch.lab2.homeautomation.environment.EnvironmentActor;
 
 import java.util.UUID;
 import java.util.concurrent.CompletionStage;
@@ -27,8 +27,32 @@ public class HomeAutomationController extends AbstractBehavior<Void> {
         // TODO: consider guardians and hierarchies. Who should create and communicate with which Actors?
         // TODO: Remember: We are communicating over the Receptionist (unless fridge), thus it is most likely, that you are not passing any ActorRefs to other Actors here.
         // TODO: One exception to this rule is that you are allowed to pass the ActorRef when you are communicating through Request-Response (actor.ask())
-        ActorRef<AirCondition.AirConditionCommand> airCondition = getContext().spawn(AirCondition.create(UUID.randomUUID().toString()), "airCondition");
-        ActorRef<TemperatureSensor.TemperatureCommand> tempSensor = getContext().spawn(TemperatureSensor.create(airCondition), "temperatureSensor");
+        ActorRef<AirCondition.AirConditionCommand> airCondition =
+                getContext().spawn(AirCondition.create(UUID.randomUUID().toString()), "airCondition");
+
+        ActorRef<TemperatureSensor.TemperatureCommand> tempSensor =
+                getContext().spawn(TemperatureSensor.create(airCondition), "temperatureSensor");
+
+        ActorRef<Blinds.Command> blinds =
+                getContext().spawn(Blinds.create(), "blinds");
+
+        ActorRef<WeatherSensor.Command> weatherSensor =
+                getContext().spawn(WeatherSensor.create(blinds), "weatherSensor");
+
+        ActorRef<EnvironmentActor.Command> environment =
+                getContext().spawn(
+                        EnvironmentActor.create(tempSensor, weatherSensor),
+                        "environment"
+                );
+
+        ActorRef<MediaStation.Command> mediaStation =
+                getContext().spawn(MediaStation.create(blinds), "mediaStation");
+
+        ActorRef<Fridge.Command> fridge =
+                getContext().spawn(Fridge.create(), "fridge");
+
+        fridge.tell(new Fridge.AddProduct("Milk", 2, 1.0));
+        fridge.tell(new Fridge.ConsumeProduct("Milk", 2));
 
         final Http http = Http.get(context.getSystem());
         DemoHttpServer app = new DemoHttpServer();

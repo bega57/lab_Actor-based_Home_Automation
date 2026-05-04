@@ -43,9 +43,22 @@ public class AirCondition extends AbstractBehavior<AirCondition.AirConditionComm
                 .build();
     }
 
+    private boolean isOn = false;
+
     private Behavior<AirConditionCommand> onReadTemperature(EnrichedTemperature r) {
         getContext().getLog().info("Aircondition reading {}", r.value);
-        // TODO: process temperature
+
+        if (r.value > 20) {
+            if (!isOn) {
+                isOn = true;
+                getContext().getLog().info("AC turned ON (cooling)");
+            }
+        } else {
+            if (isOn) {
+                isOn = false;
+                getContext().getLog().info("AC turned OFF");
+            }
+        }
 
         return Behaviors.same();
     }

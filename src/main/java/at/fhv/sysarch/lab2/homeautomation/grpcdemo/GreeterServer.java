@@ -49,8 +49,8 @@ public class GreeterServer {
     public CompletionStage<ServerBinding> run() throws Exception {
 
         Function<HttpRequest, CompletionStage<HttpResponse>> service =
-                GreeterServiceHandlerFactory.create(
-                        new GreeterServiceImpl(system),
+                OrderServiceHandlerFactory.create(
+                        new OrderServiceImpl(),
                         system);
 
         CompletionStage<ServerBinding> bound =

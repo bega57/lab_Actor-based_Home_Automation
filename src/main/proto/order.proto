@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "at.fhv.sysarch.lab2.homeautomation.grpcdemo";
+option java_outer_classname = "OrderProto";
+
+service OrderService {
+  rpc OrderProduct (OrderRequest) returns (OrderResponse);
+}
+
+message OrderRequest {
+  string name = 1;
+  int32 amount = 2;
+}
+
+message OrderResponse {
+  string message = 1;
+}
