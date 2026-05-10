@@ -3,6 +3,7 @@ package at.fhv.sysarch.lab2.homeautomation.grpcdemo;
 
 //#import
 
+import org.apache.pekko.actor.typed.ActorRef;
 import org.apache.pekko.actor.typed.ActorSystem;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
 import org.apache.pekko.http.javadsl.*;
@@ -11,6 +12,7 @@ import org.apache.pekko.http.javadsl.model.HttpResponse;
 import org.apache.pekko.japi.function.Function;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
+import at.fhv.sysarch.lab2.homeautomation.persistence.OrderPersistenceActor;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -48,10 +50,25 @@ public class GreeterServer {
 
     public CompletionStage<ServerBinding> run() throws Exception {
 
+        ActorRef<OrderPersistenceActor.Command> persistence =
+                system.systemActorOf(
+                        OrderPersistenceActor.create(),
+                        "grpcPersistence",
+                        org.apache.pekko.actor.typed.Props.empty()
+                );
+
+        ActorRef<OrderProcessorActor.Command> processor =
+                system.systemActorOf(
+                        OrderProcessorActor.create(persistence),
+                        "orderProcessor",
+                        org.apache.pekko.actor.typed.Props.empty()
+                );
+
         Function<HttpRequest, CompletionStage<HttpResponse>> service =
                 OrderServiceHandlerFactory.create(
-                        new OrderServiceImpl(),
-                        system);
+                        new OrderServiceImpl(processor, system),
+                        system
+                );
 
         CompletionStage<ServerBinding> bound =
                 Http.get(system)
@@ -59,7 +76,10 @@ public class GreeterServer {
                         .bind(service);
 
         bound.thenAccept(binding ->
-                System.out.println("gRPC server bound to: " + binding.localAddress())
+                System.out.println(
+                        "gRPC server bound to: "
+                                + binding.localAddress()
+                )
         );
 
         return bound;

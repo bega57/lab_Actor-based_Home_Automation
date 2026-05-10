@@ -4,9 +4,13 @@ import org.apache.pekko.actor.typed.ActorRef;
 import org.apache.pekko.actor.typed.Behavior;
 import org.apache.pekko.actor.typed.javadsl.*;
 
+
 public class MediaStation extends AbstractBehavior<MediaStation.Command> {
 
     public interface Command {}
+    public record GetStatus(ActorRef<StatusResponse> replyTo) implements Command {}
+
+    public record StatusResponse(boolean playing) {}
 
     public record PlayMovie(String name) implements Command {}
     public record StopMovie() implements Command {}
@@ -30,34 +34,48 @@ public class MediaStation extends AbstractBehavior<MediaStation.Command> {
         return newReceiveBuilder()
                 .onMessage(PlayMovie.class, this::onPlayMovie)
                 .onMessage(StopMovie.class, this::onStopMovie)
+                .onMessage(GetStatus.class, this::onGetStatus)
                 .build();
     }
 
     private Behavior<Command> onPlayMovie(PlayMovie msg) {
         if (isPlaying) {
             getContext().getLog().info("A movie is already playing!");
-            return this;
+            return Behaviors.same();
         }
 
         isPlaying = true;
+
         getContext().getLog().info("Playing movie: {}", msg.name);
 
         blinds.tell(new Blinds.MovieMode(true));
 
-        return this;
+        return Behaviors.same();
     }
 
     private Behavior<Command> onStopMovie(StopMovie msg) {
         if (!isPlaying) {
             getContext().getLog().info("No movie is playing");
-            return this;
+            return Behaviors.same();
         }
 
         isPlaying = false;
+
         getContext().getLog().info("Movie stopped");
 
         blinds.tell(new Blinds.MovieMode(false));
 
-        return this;
+        return Behaviors.same();
+    }
+
+    private Behavior<Command> onGetStatus(
+            GetStatus msg
+    ) {
+
+        msg.replyTo.tell(
+                new StatusResponse(isPlaying)
+        );
+
+        return Behaviors.same();
     }
 }

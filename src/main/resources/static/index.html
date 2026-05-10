@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Home Dashboard</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<div class="dashboard">
+
+    <!-- TOPBAR -->
+
+    <div class="topbar">
+
+        <div>
+            <h1>Smart Home Dashboard</h1>
+
+            <p class="subtitle">
+                Actor-Based Home Automation System
+            </p>
+        </div>
+
+        <div class="status-badge">
+            Connected
+        </div>
+
+    </div>
+
+    <!-- TOP GRID -->
+
+    <div class="top-grid">
+
+        <!-- ENVIRONMENT -->
+
+        <div class="card hero-card">
+
+            <p class="small-label">
+                Environment
+            </p>
+
+            <div class="temperature-big"
+                 id="temperature">
+                -- °C
+            </div>
+
+            <div class="weather-text"
+                 id="weather">
+                --
+            </div>
+
+        </div>
+
+        <!-- MEDIA -->
+
+        <div class="card device-card">
+
+            <h2>Media Station</h2>
+
+            <div class="tv">
+
+                <div class="tv-screen"
+                     id="tvScreen">
+                    OFF
+                </div>
+
+            </div>
+
+            <div class="button-group">
+
+                <button onclick="playMovie()">
+                    Play
+                </button>
+
+                <button class="danger"
+                        onclick="stopMovie()">
+                    Stop
+                </button>
+
+            </div>
+
+        </div>
+
+        <!-- AC -->
+
+        <div class="card device-card">
+
+            <h2>Air Condition</h2>
+
+            <div class="ac-unit">
+
+                <div class="ac-light"
+                     id="acLight"></div>
+
+                <div class="ac-lines">
+
+                    <span></span>
+                    <span></span>
+                    <span></span>
+
+                </div>
+
+            </div>
+
+            <div class="device-state"
+                 id="acStatus">
+                OFF
+            </div>
+
+        </div>
+
+        <!-- BLINDS -->
+
+        <div class="card device-card">
+
+            <h2>Blinds</h2>
+
+            <div class="window">
+
+                <div class="window-light"></div>
+
+                <div class="blinds"
+                     id="blinds">
+
+                    <div class="blind-line"></div>
+                    <div class="blind-line"></div>
+                    <div class="blind-line"></div>
+                    <div class="blind-line"></div>
+                    <div class="blind-line"></div>
+                    <div class="blind-line"></div>
+                    <div class="blind-line"></div>
+
+                </div>
+
+            </div>
+
+            <div class="device-state"
+                 id="blindsStatus">
+                OPEN
+            </div>
+
+        </div>
+
+        <!-- CONTROL -->
+
+        <div class="card control-card">
+
+            <h2>Environment Control</h2>
+
+            <div class="button-group">
+
+                <button onclick="setMode('internal')">
+                    Internal
+                </button>
+
+                <button onclick="setMode('external')">
+                    External
+                </button>
+
+                <button class="danger"
+                        onclick="setMode('off')">
+                    OFF
+                </button>
+
+            </div>
+
+            <div class="button-group">
+
+                <button onclick="simulation(true)">
+                    Simulation ON
+                </button>
+
+                <button class="danger"
+                        onclick="simulation(false)">
+                    Simulation OFF
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- BOTTOM GRID -->
+
+    <div class="bottom-grid">
+
+        <!-- FRIDGE -->
+
+        <div class="card fridge-panel">
+
+            <div class="panel-header">
+
+                <div>
+
+                    <p class="small-label">
+                        Kitchen
+                    </p>
+
+                    <h2>
+                        Smart Fridge
+                    </h2>
+
+                </div>
+
+                <div class="status-badge">
+                    Live Storage
+                </div>
+
+            </div>
+
+            <div class="fridge-scene">
+
+                <!-- FRIDGE -->
+
+                <div class="fridge-device">
+
+                    <div class="freezer-section">
+
+                        <div class="freezer-display">
+                            3.2 KG
+                        </div>
+
+                    </div>
+
+                    <div class="fridge-section"
+                         id="fridgeContents">
+
+                    </div>
+
+                </div>
+
+                <!-- ACTIONS -->
+
+                <div class="fridge-actions">
+
+                    <!-- ORDER -->
+
+                    <div class="action-card">
+
+                        <h3>Order Product</h3>
+
+                        <div class="action-row">
+
+                            <input type="text"
+                                   id="productName"
+                                   placeholder="Product">
+
+                            <input type="number"
+                                   id="productAmount"
+                                   placeholder="Qty">
+
+                        </div>
+
+                        <button onclick="orderProduct()">
+                            Order
+                        </button>
+
+                    </div>
+
+                    <!-- CONSUME -->
+
+                    <div class="action-card">
+
+                        <h3>Consume Product</h3>
+
+                        <div class="action-row">
+
+                            <input type="text"
+                                   id="consumeName"
+                                   placeholder="Product">
+
+                            <input type="number"
+                                   id="consumeAmount"
+                                   placeholder="Qty">
+
+                        </div>
+
+                        <button class="danger"
+                                onclick="consumeProduct()">
+                            Consume
+                        </button>
+
+                    </div>
+
+                    <!-- HISTORY -->
+
+                    <div class="action-card history-box">
+
+                        <div class="history-header">
+
+                            <h3>Order History</h3>
+
+                            <button class="clear-btn"
+                                    onclick="clearHistory()">
+                                Clear
+                            </button>
+
+                        </div>
+
+                        <div id="orderHistory"></div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script src="app.js"></script>
+
+</body>
+</html>

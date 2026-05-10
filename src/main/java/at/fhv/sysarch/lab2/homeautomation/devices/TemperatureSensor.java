@@ -7,6 +7,7 @@ import org.apache.pekko.actor.typed.javadsl.AbstractBehavior;
 import org.apache.pekko.actor.typed.javadsl.ActorContext;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
 import org.apache.pekko.actor.typed.javadsl.Receive;
+import org.apache.pekko.actor.typed.receptionist.Receptionist;
 
 
 /**
@@ -18,20 +19,39 @@ public class TemperatureSensor extends AbstractBehavior<TemperatureSensor.Temper
 
     // commands our actor is able to receive
     public interface TemperatureCommand { }
+    private record AirConditionListing(
+            Receptionist.Listing listing
+    ) implements TemperatureCommand {}
     public record ReadTemperature(double value) implements TemperatureCommand  { } // you may also use normal java classes instead of records, but this will result in lots of boilerplate (getter, setter, constructor)
 
     // factory function called when a new instance of this actor is created
-    public static Behavior<TemperatureCommand> create(ActorRef<AirCondition.AirConditionCommand> airCondition) {
-        return Behaviors.setup(context -> new TemperatureSensor(context, airCondition));
+    public static Behavior<TemperatureCommand> create() {
+        return Behaviors.setup(TemperatureSensor::new);
     }
 
     // mutable/immutable state variables of the actor defined here.
-    private final ActorRef<AirCondition.AirConditionCommand> airCondition; // TODO: Get this ActorRef over the Receptionist
+    private ActorRef<AirCondition.AirConditionCommand> airCondition;
 
     // constructor initializing the actor
-    public TemperatureSensor(ActorContext<TemperatureCommand> context, ActorRef<AirCondition.AirConditionCommand> airCondition) {
+    public TemperatureSensor(
+            ActorContext<TemperatureCommand> context
+    ) {
+
         super(context);
-        this.airCondition = airCondition;
+
+        ActorRef<Receptionist.Listing> listingAdapter =
+                context.messageAdapter(
+                        Receptionist.Listing.class,
+                        AirConditionListing::new
+                );
+
+        context.getSystem().receptionist().tell(
+                Receptionist.subscribe(
+                        AirCondition.SERVICE_KEY,
+                        listingAdapter
+                )
+        );
+
         getContext().getLog().info("TemperatureSensor started");
     }
 
@@ -39,7 +59,16 @@ public class TemperatureSensor extends AbstractBehavior<TemperatureSensor.Temper
     @Override
     public Receive<TemperatureCommand> createReceive() {
         return newReceiveBuilder()
-                .onMessage(ReadTemperature.class, this::onReadTemperature)
+
+                .onMessage(
+                        AirConditionListing.class,
+                        this::onAirConditionListing
+                )
+
+                .onMessage(
+                        ReadTemperature.class,
+                        this::onReadTemperature
+                )
                 .onSignal(PostStop.class, signal -> onPostStop())
                 .build();
     }
@@ -47,7 +76,38 @@ public class TemperatureSensor extends AbstractBehavior<TemperatureSensor.Temper
     // handler method for ReadTemperature command
     private Behavior<TemperatureCommand> onReadTemperature(ReadTemperature r) {
         getContext().getLog().info("TemperatureSensor received {}", r.value);
-        this.airCondition.tell(new AirCondition.EnrichedTemperature(r.value, "Celsius")); // contacts the airCondition actor in a Fire & Forget Pattern.
+
+        if (airCondition != null) {
+
+            airCondition.tell(
+                    new AirCondition.EnrichedTemperature(
+                            r.value,
+                            "Celsius"
+                    )
+            );
+        }
+
+        return this;
+    }
+
+    private Behavior<TemperatureCommand> onAirConditionListing(
+            AirConditionListing msg
+    ) {
+
+        var instances =
+                msg.listing.getServiceInstances(
+                        AirCondition.SERVICE_KEY
+                );
+
+        instances.stream().findFirst().ifPresent(ref -> {
+
+            airCondition = ref;
+
+            getContext().getLog().info(
+                    "AirCondition found via Receptionist"
+            );
+        });
+
         return this;
     }
 

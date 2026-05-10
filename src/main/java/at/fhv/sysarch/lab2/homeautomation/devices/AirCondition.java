@@ -1,11 +1,14 @@
 package at.fhv.sysarch.lab2.homeautomation.devices;
 
+import org.apache.pekko.actor.typed.ActorRef;
 import org.apache.pekko.actor.typed.Behavior;
 import org.apache.pekko.actor.typed.PostStop;
 import org.apache.pekko.actor.typed.javadsl.AbstractBehavior;
 import org.apache.pekko.actor.typed.javadsl.ActorContext;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
 import org.apache.pekko.actor.typed.javadsl.Receive;
+import org.apache.pekko.actor.typed.receptionist.ServiceKey;
+import org.apache.pekko.actor.typed.receptionist.Receptionist;
 
 /**
  * Note: This is an incomplete demonstration how a temperature could be implemented.
@@ -14,8 +17,15 @@ import org.apache.pekko.actor.typed.javadsl.Receive;
  */
 public class AirCondition extends AbstractBehavior<AirCondition.AirConditionCommand> {
 
+    public static final ServiceKey<AirConditionCommand> SERVICE_KEY =
+            ServiceKey.create(
+                    AirConditionCommand.class,
+                    "AirConditionService"
+            );
     // commands our actor is able to receive
     public interface AirConditionCommand { }
+    public record GetStatus(ActorRef<StatusResponse> replyTo) implements AirConditionCommand {}
+    public record StatusResponse(boolean isOn) {}
     public record PowerAirCondition(boolean value) implements AirConditionCommand { }
     public record EnrichedTemperature(double value, String unit) implements AirConditionCommand { }
 
@@ -31,6 +41,12 @@ public class AirCondition extends AbstractBehavior<AirCondition.AirConditionComm
     public AirCondition(ActorContext<AirConditionCommand> context, String identifier) {
         super(context);
         this.identifier = identifier;
+        context.getSystem().receptionist().tell(
+                Receptionist.register(
+                        SERVICE_KEY,
+                        context.getSelf()
+                )
+        );
         getContext().getLog().info("AirCondition started");
     }
 
@@ -39,6 +55,7 @@ public class AirCondition extends AbstractBehavior<AirCondition.AirConditionComm
     public Receive<AirConditionCommand> createReceive() {
         return newReceiveBuilder()
                 .onMessage(EnrichedTemperature.class, this::onReadTemperature)
+                .onMessage(GetStatus.class, this::onGetStatus)
                 .onSignal(PostStop.class, signal -> onPostStop())
                 .build();
     }
@@ -51,11 +68,13 @@ public class AirCondition extends AbstractBehavior<AirCondition.AirConditionComm
         if (r.value > 20) {
             if (!isOn) {
                 isOn = true;
+
                 getContext().getLog().info("AC turned ON (cooling)");
             }
         } else {
             if (isOn) {
                 isOn = false;
+
                 getContext().getLog().info("AC turned OFF");
             }
         }
@@ -63,8 +82,19 @@ public class AirCondition extends AbstractBehavior<AirCondition.AirConditionComm
         return Behaviors.same();
     }
 
-    private AirCondition onPostStop() {
+    private Behavior<AirConditionCommand> onPostStop() {
         getContext().getLog().info("AirCondition actor {}-{} stopped", identifier);
-        return this;
+        return Behaviors.same();
+    }
+
+    private Behavior<AirConditionCommand> onGetStatus(
+            GetStatus msg
+    ) {
+
+        msg.replyTo.tell(
+                new StatusResponse(isOn)
+        );
+
+        return Behaviors.same();
     }
 }
