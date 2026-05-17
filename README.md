@@ -1,100 +1,148 @@
-**Smart Home Automation System**
+# Smart Home Automation System
 
-**Overview**
+## Overview
 
-This project implements an actor-based smart home automation system using Apache Pekko.
+Actor-based smart home automation system built with Apache Pekko Typed.  
+Simulates a living room and kitchen with sensors, actuators, and a smart fridge.
 
-The system simulates a living room and kitchen environment containing:
+The system consists of **two independently deployable components**:
 
-* Temperature Sensor
-* Weather Sensor
-* Air Conditioning
-* Blinds
-* Media Station
-* Smart Fridge
+- **Home Automation System** – sensors, actuators, fridge, web dashboard
+- **External Order Processing System** – gRPC server with H2 database persistence
 
-Additionally, an external order-processing system was implemented using gRPC and H2 Database persistence.
+---
 
-The application also supports:
+## Prerequisites
 
-* internal environment simulation
-* external MQTT weather source
-* switching between simulation modes
-* web-based dashboard UI
+- Java 17 or higher
+- Gradle (included via `./gradlew`)
+- IntelliJ IDEA (recommended) or any Java IDE
 
-**Technologies**
+---
 
-* Java
-* Apache Pekko Typed Actors
-* Pekko HTTP
-* Pekko gRPC
-* Eclipse Paho MQTT
-* H2 Database
+## Technologies
 
-**Running the Application**
-**Important**
+| Technology | Purpose |
+|---|---|
+| Apache Pekko Typed Actors | Actor-based concurrency |
+| Pekko HTTP | REST API + Web UI |
+| Pekko gRPC | Communication between the two systems |
+| Eclipse Paho MQTT | External weather data source |
+| H2 Database | Persistent order storage |
+| Java | Implementation language |
 
-To receive external MQTT weather data, you must be connected to:
+---
 
-* FHV VPN
-OR
-* FHV eduroam WiFi
+## Running the Application
 
-The MQTT broker used in this project is:
+> **Start GreeterServer first.** If the Home Automation System starts
+> before the gRPC server, the fridge cannot process orders.
+> The rest of the system (sensors, AC, blinds, media) will still work normally.
 
-10.0.40.161:1883
+### Step 1 – Start the Order Processing Server
 
-**Start Order Processing Server**
+In IntelliJ: Run **`GreeterServer.java`**  
+*(located in `src/main/java/.../grpcdemo/GreeterServer.java`)*
 
-Run:
+Or via Gradle:
+```bash
+./gradlew run --args="grpc"
+```
 
-GreeterServer.java
+This starts the gRPC order processing server on **`localhost:8080`**.
 
-This starts the external gRPC order processing system on:
+---
 
-localhost:8080
+### Step 2 – Start the Home Automation System
 
-**Start Home Automation System**
+In IntelliJ: Run **`HomeAutomationSystem.java`**  
+*(located in `src/main/java/.../HomeAutomationSystem.java`)*
 
-Run:
-
-HomeAutomationSystem.java
+Or via Gradle:
+```bash
+./gradlew run
+```
 
 This starts:
+- The actor-based home automation system
+- The REST API server
+- The web dashboard
 
-* the actor-based smart home system
-* the REST server
-* the web interface
+Available at: **`http://localhost:8084`**
 
-**Open Web Interface**
+> To stop the application, press **RETURN** in the terminal where it is running.
 
-Open:
+---
 
-http://localhost:8084
+### MQTT (External Weather Source)
 
-**Features**
+To receive live weather data from the FHV simulation server, connect to:
 
-**Environment**
-* Internal simulation
-* External MQTT source
-* Manual temperature control
-* Manual weather control
-* Enable/disable simulation
+- **FHV VPN**, or
+- **FHV eduroam Wi-Fi**
 
-**Media Station**
-* Start movie
-* Stop movie
-* Blinds automatically close during movies
+MQTT Broker: `10.0.40.161:1883`
 
-**Air Conditioning**
-* Turns on above 20°C
-* Turns off below 20°C
+Without VPN/eduroam the system starts normally and uses **internal simulation** instead.
 
-**Smart Fridge**
-* Order products
-* Consume products
-* Automatic reorder when empty
-* Weight capacity validation
-* Product capacity validation
-* Order history
-* Persistent order storage in H2 database
+---
+
+## Web Dashboard
+
+Open **`http://localhost:8084`** in your browser.
+
+### Environment Controls
+| Control | Description |
+|---|---|
+| Mode: Internal | Use actor-based temperature/weather simulation |
+| Mode: External | Use live MQTT data from FHV broker |
+| Mode: Off | Disable all automatic updates (manual values only) |
+| Set Temperature | Manually set a fixed temperature value |
+| Set Weather | Manually set weather: `sunny`, `cloudy`, `rain`, `storm`, `snow` |
+| Simulation On/Off | Enable or disable the internal simulation ticks |
+
+### Media Station
+1. Type a **movie title** in the text field
+2. Click **Play** to start — blinds close automatically
+3. Click **Stop** to stop — blinds revert to weather-controlled state
+4. Starting a second movie while one is playing is **not allowed**
+
+### Smart Fridge
+The fridge starts pre-filled with: `Milk (×2)`, `Red Bull (×2)`, `Pizza (×2)`, `Capri Sun (×2)`
+
+| Action | How |
+|---|---|
+| Order product | Enter product name + amount → click Order |
+| Consume product | Enter product name + amount → click Consume |
+| Auto-reorder | Happens automatically when a product reaches 0 |
+| View contents | Shown live in the dashboard |
+| View order history | Shown in the Order History section |
+
+> Orders are validated against weight limit (20 kg) and item limit (20 items).  
+> Orders are forwarded via gRPC to the Order Processing Server and persisted in H2.
+
+### Air Conditioning
+Reacts automatically to temperature — no manual control needed.
+- **ON** when temperature > 20 °C
+- **OFF** when temperature ≤ 20 °C
+
+---
+
+## REST API Reference
+
+| Endpoint | Description |
+|---|---|
+| `GET /status` | JSON status of all devices |
+| `GET /fridge` | Current fridge contents as JSON |
+| `GET /order/{name}/{amount}` | Order a product |
+| `GET /consume/{name}/{amount}` | Consume a product |
+| `GET /orderHistory` | Order history as JSON |
+| `GET /playMovie/{title}` | Start a movie (URL-encoded title) |
+| `GET /stopMovie` | Stop current movie |
+| `GET /setTemperature/{value}` | Set temperature manually (−30 to 60) |
+| `GET /setWeather/{condition}` | Set weather manually |
+| `GET /mode/internal` | Switch to internal simulation |
+| `GET /mode/external` | Switch to MQTT source |
+| `GET /mode/off` | Disable all simulation |
+| `GET /simulation/on` | Enable simulation ticks |
+| `GET /simulation/off` | Disable simulation ticks |

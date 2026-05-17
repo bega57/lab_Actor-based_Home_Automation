@@ -10,204 +10,136 @@ import org.apache.pekko.actor.typed.Behavior;
 import org.apache.pekko.actor.typed.Scheduler;
 import org.apache.pekko.actor.typed.javadsl.*;
 
+import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
+
 public class StatusAggregatorActor extends AbstractBehavior<StatusAggregatorActor.Command> {
+
+    private static final Duration ASK_TIMEOUT = Duration.ofSeconds(3);
 
     public interface Command {}
 
-    public record GetFullStatus(
-            ActorRef<String> replyTo
+    public record GetFullStatus(ActorRef<String> replyTo) implements Command {}
+
+    private record AllCollected(
+            ActorRef<String>                  replyTo,
+            EnvironmentActor.StatusResponse   env,
+            AirCondition.StatusResponse       ac,
+            Blinds.StatusResponse             blinds,
+            MediaStation.StatusResponse       media
     ) implements Command {}
 
-    private record WrappedEnvironmentResponse(
-            EnvironmentActor.StatusResponse response
+    private record CollectFailed(
+            ActorRef<String> replyTo,
+            String           reason
     ) implements Command {}
 
-    private record WrappedAirConditionResponse(
-            AirCondition.StatusResponse response
-    ) implements Command {}
-
-    private record WrappedBlindsResponse(
-            Blinds.StatusResponse response
-    ) implements Command {}
-
-    private record WrappedMediaResponse(
-            MediaStation.StatusResponse response
-    ) implements Command {}
-
-    private final ActorRef<EnvironmentActor.Command> environment;
+    private final ActorRef<EnvironmentActor.Command>         environment;
     private final ActorRef<AirCondition.AirConditionCommand> airCondition;
-    private final ActorRef<Blinds.Command> blinds;
-    private final ActorRef<MediaStation.Command> mediaStation;
-
-    private ActorRef<String> pendingReply;
-
-    private EnvironmentActor.StatusResponse environmentStatus;
-    private AirCondition.StatusResponse airConditionStatus;
-    private Blinds.StatusResponse blindsStatus;
-    private MediaStation.StatusResponse mediaStatus;
+    private final ActorRef<Blinds.Command>                   blinds;
+    private final ActorRef<MediaStation.Command>             mediaStation;
+    private final Scheduler                                  scheduler;
 
     public static Behavior<Command> create(
-            ActorRef<EnvironmentActor.Command> environment,
+            ActorRef<EnvironmentActor.Command>         environment,
             ActorRef<AirCondition.AirConditionCommand> airCondition,
-            ActorRef<Blinds.Command> blinds,
-            ActorRef<MediaStation.Command> mediaStation,
-            Scheduler scheduler
+            ActorRef<Blinds.Command>                   blinds,
+            ActorRef<MediaStation.Command>             mediaStation,
+            Scheduler                                  scheduler
     ) {
         return Behaviors.setup(ctx ->
-                new StatusAggregatorActor(
-                        ctx,
-                        environment,
-                        airCondition,
-                        blinds,
-                        mediaStation
-                )
+                new StatusAggregatorActor(ctx, environment, airCondition, blinds, mediaStation, scheduler)
         );
     }
 
     private StatusAggregatorActor(
             ActorContext<Command> context,
-            ActorRef<EnvironmentActor.Command> environment,
+            ActorRef<EnvironmentActor.Command>         environment,
             ActorRef<AirCondition.AirConditionCommand> airCondition,
-            ActorRef<Blinds.Command> blinds,
-            ActorRef<MediaStation.Command> mediaStation
+            ActorRef<Blinds.Command>                   blinds,
+            ActorRef<MediaStation.Command>             mediaStation,
+            Scheduler                                  scheduler
     ) {
         super(context);
-
-        this.environment = environment;
+        this.environment  = environment;
         this.airCondition = airCondition;
-        this.blinds = blinds;
+        this.blinds       = blinds;
         this.mediaStation = mediaStation;
+        this.scheduler    = scheduler;
     }
 
     @Override
     public Receive<Command> createReceive() {
         return newReceiveBuilder()
                 .onMessage(GetFullStatus.class, this::onGetFullStatus)
-                .onMessage(WrappedEnvironmentResponse.class, this::onEnvironmentResponse)
-                .onMessage(WrappedAirConditionResponse.class, this::onAirConditionResponse)
-                .onMessage(WrappedBlindsResponse.class, this::onBlindsResponse)
-                .onMessage(WrappedMediaResponse.class, this::onMediaResponse)
+                .onMessage(AllCollected.class,  this::onAllCollected)
+                .onMessage(CollectFailed.class, this::onCollectFailed)
                 .build();
     }
 
-    private Behavior<Command> onGetFullStatus(
-            GetFullStatus msg
-    ) {
+    private Behavior<Command> onGetFullStatus(GetFullStatus msg) {
+        // Fire all 4 asks in parallel – each is a completely independent future
+        CompletableFuture<EnvironmentActor.StatusResponse> envFuture =
+                AskPattern.ask(environment,  EnvironmentActor.GetStatus::new,
+                        ASK_TIMEOUT, scheduler).toCompletableFuture();
 
-        pendingReply = msg.replyTo;
+        CompletableFuture<AirCondition.StatusResponse> acFuture =
+                AskPattern.ask(airCondition, AirCondition.GetStatus::new,
+                        ASK_TIMEOUT, scheduler).toCompletableFuture();
 
-        ActorRef<EnvironmentActor.StatusResponse> envAdapter =
-                getContext().messageAdapter(
-                        EnvironmentActor.StatusResponse.class,
-                        WrappedEnvironmentResponse::new
-                );
+        CompletableFuture<Blinds.StatusResponse> blindsFuture =
+                AskPattern.ask(blinds,       Blinds.GetStatus::new,
+                        ASK_TIMEOUT, scheduler).toCompletableFuture();
 
-        ActorRef<AirCondition.StatusResponse> acAdapter =
-                getContext().messageAdapter(
-                        AirCondition.StatusResponse.class,
-                        WrappedAirConditionResponse::new
-                );
+        CompletableFuture<MediaStation.StatusResponse> mediaFuture =
+                AskPattern.ask(mediaStation, MediaStation.GetStatus::new,
+                        ASK_TIMEOUT, scheduler).toCompletableFuture();
 
-        ActorRef<Blinds.StatusResponse> blindsAdapter =
-                getContext().messageAdapter(
-                        Blinds.StatusResponse.class,
-                        WrappedBlindsResponse::new
-                );
+        // Combine: when ALL 4 succeed build AllCollected; on any failure → CollectFailed
+        CompletableFuture<AllCollected> combined =
+                CompletableFuture.allOf(envFuture, acFuture, blindsFuture, mediaFuture)
+                        .thenApply(v -> new AllCollected(
+                                msg.replyTo(),
+                                envFuture.join(),
+                                acFuture.join(),
+                                blindsFuture.join(),
+                                mediaFuture.join()
+                        ));
 
-        ActorRef<MediaStation.StatusResponse> mediaAdapter =
-                getContext().messageAdapter(
-                        MediaStation.StatusResponse.class,
-                        WrappedMediaResponse::new
-                );
+        // pipeToSelf brings result back safely into the actor thread
+        getContext().pipeToSelf(combined, (result, error) -> {
+            if (error != null) return new CollectFailed(msg.replyTo(), error.getMessage());
+            return result;
+        });
 
-        environment.tell(
-                new EnvironmentActor.GetStatus(envAdapter)
+        return Behaviors.same();
+    }
+
+    private Behavior<Command> onAllCollected(AllCollected msg) {
+        String safeTitle = msg.media().currentTitle()
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"");
+
+        String json = "{"
+                + "\"temperature\":"    + msg.env().temperature()  + ","
+                + "\"weather\":\""      + msg.env().weather()       + "\","
+                + "\"airConditionOn\":" + msg.ac().isOn()           + ","
+                + "\"blindsClosed\":"   + msg.blinds().closed()     + ","
+                + "\"moviePlaying\":"   + msg.media().playing()     + ","
+                + "\"currentTitle\":\"" + safeTitle                 + "\""
+                + "}";
+
+        msg.replyTo().tell(json);
+        return Behaviors.same();
+    }
+
+    private Behavior<Command> onCollectFailed(CollectFailed msg) {
+        getContext().getLog().warn("Status collection failed: {}", msg.reason());
+        msg.replyTo().tell(
+                "{\"temperature\":0,\"weather\":\"unknown\","
+                        + "\"airConditionOn\":false,\"blindsClosed\":false,"
+                        + "\"moviePlaying\":false,\"currentTitle\":\"\"}"
         );
-
-        airCondition.tell(
-                new AirCondition.GetStatus(acAdapter)
-        );
-
-        blinds.tell(
-                new Blinds.GetStatus(blindsAdapter)
-        );
-
-        mediaStation.tell(
-                new MediaStation.GetStatus(mediaAdapter)
-        );
-
         return Behaviors.same();
-    }
-
-    private Behavior<Command> onEnvironmentResponse(
-            WrappedEnvironmentResponse msg
-    ) {
-
-        environmentStatus = msg.response;
-
-        tryReply();
-
-        return Behaviors.same();
-    }
-
-    private Behavior<Command> onAirConditionResponse(
-            WrappedAirConditionResponse msg
-    ) {
-
-        airConditionStatus = msg.response;
-
-        tryReply();
-
-        return Behaviors.same();
-    }
-
-    private Behavior<Command> onBlindsResponse(
-            WrappedBlindsResponse msg
-    ) {
-
-        blindsStatus = msg.response;
-
-        tryReply();
-
-        return Behaviors.same();
-    }
-
-    private Behavior<Command> onMediaResponse(
-            WrappedMediaResponse msg
-    ) {
-
-        mediaStatus = msg.response;
-
-        tryReply();
-
-        return Behaviors.same();
-    }
-
-    private void tryReply() {
-
-        if (
-                environmentStatus == null ||
-                        airConditionStatus == null ||
-                        blindsStatus == null ||
-                        mediaStatus == null
-        ) {
-            return;
-        }
-
-        String json =
-                "{"
-                        + "\"temperature\":" + environmentStatus.temperature() + ","
-                        + "\"weather\":\"" + environmentStatus.weather() + "\","
-                        + "\"airConditionOn\":" + airConditionStatus.isOn() + ","
-                        + "\"blindsClosed\":" + blindsStatus.closed() + ","
-                        + "\"moviePlaying\":" + mediaStatus.playing()
-                        + "}";
-
-        pendingReply.tell(json);
-
-        environmentStatus = null;
-        airConditionStatus = null;
-        blindsStatus = null;
-        mediaStatus = null;
     }
 }

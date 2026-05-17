@@ -8,11 +8,19 @@ service OrderService {
   rpc OrderProduct (OrderRequest) returns (OrderResponse);
 }
 
+// Request carries the unit price so the processor can compute the total
 message OrderRequest {
-  string name = 1;
-  int32 amount = 2;
+  string name   = 1;
+  int32  amount = 2;
+  double price  = 3;   // unit price per item
 }
 
+// Structured receipt returned after a successful (or failed) order
 message OrderResponse {
-  string message = 1;
+  bool   success = 1;
+  string message = 2;
+  string product = 3;
+  int32  amount  = 4;
+  double price   = 5;
+  double total   = 6;
 }
