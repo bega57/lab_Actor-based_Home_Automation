@@ -35,11 +35,41 @@ import java.util.concurrent.CompletionStage;
 public class GreeterServer {
 
     public static void main(String[] args) throws Exception {
+        initSchema();
+
         // important to enable HTTP/2 in ActorSystem's config
         Config conf = ConfigFactory.parseString("pekko.http.server.preview.enable-http2 = on")
                 .withFallback(ConfigFactory.load());
         ActorSystem<Void> system = ActorSystem.create(Behaviors.empty(), "GreeterServer", conf);
         new GreeterServer(system).run();
+    }
+
+    private static void initSchema() {
+        try (java.sql.Connection conn = java.sql.DriverManager.getConnection(
+                "jdbc:h2:./pekkojournal;DATABASE_TO_UPPER=false")) {
+
+            java.io.InputStream sql = GreeterServer.class.getClassLoader()
+                    .getResourceAsStream("create-schema.sql");
+
+            if (sql == null) {
+                System.err.println("[Schema] create-schema.sql not found!");
+                return;
+            }
+
+            String ddl = new String(sql.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+
+            for (String stmt : ddl.split(";")) {
+                String s = stmt.strip();
+                if (!s.isEmpty()) {
+                    conn.createStatement().execute(s);
+                }
+            }
+            System.out.println("[Schema] H2 schema initialized");
+
+        } catch (Exception e) {
+            System.err.println("[Schema] Init failed: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     final ActorSystem<?> system;
