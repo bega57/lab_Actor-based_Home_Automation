@@ -49,6 +49,7 @@ dependencies {
     implementation "org.eclipse.paho:org.eclipse.paho.client.mqttv3:$mqttVersion"
     implementation "com.h2database:h2:$h2Version"
     implementation "ch.qos.logback:logback-classic:$logbackVersion"
+    implementation "com.fasterxml.jackson.core:jackson-databind:2.15.2"
 
     testImplementation "org.junit.jupiter:junit-jupiter-api:$junitVersion"
     testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:$junitVersion"
